@@ -28,14 +28,13 @@ module "network" {
   source   = "./modules/network"
   project  = "${var.project}"
   region   = "${var.region}"
-  vpc_name = "kube-net"
-  tags     = "${var.bastion_tags}"
+  vpc_name = "${var.vpc_name}"
 }
 
 module "firewall" {
   source   = "./modules/firewall"
   project  = "${var.project}"
-  vpc      = "${module.network.network_self_link}"
+  vpc_name = "${module.network.network_self_link}"
   net_tags = "${var.bastion_tags}"
 }
 
@@ -89,7 +88,7 @@ resource "google_container_cluster" "primary" {
   network            = "${module.network.network_self_link}"
   subnetwork         = "${module.network.subnet_self_link}"
   min_master_version = "${data.google_container_engine_versions.on-prem.latest_master_version}"
-  initial_node_count = 3
+  initial_node_count = "${var.initial_node_count}"
 
   lifecycle {
     ignore_changes = ["ip_allocation_policy.0.services_secondary_range_name"]
@@ -126,8 +125,12 @@ resource "google_container_cluster" "primary" {
     cluster_secondary_range_name = "secondary-range"
   }
 
-  master_ipv4_cidr_block = "10.0.90.0/28"
-  private_cluster        = true
+  // In a private cluster, the master has two IP addresses, one public and one
+  // private. Nodes communicate to the master through this private IP address.
+  private_cluster_config {
+    enable_private_nodes   = true
+    master_ipv4_cidr_block = "10.0.90.0/28"
+  }
 
   // (Required for private cluster, optional otherwise) network (cidr) from which cluster is accessible
   master_authorized_networks_config {
@@ -162,4 +165,3 @@ resource "google_container_cluster" "primary" {
     }
   }
 }
-
